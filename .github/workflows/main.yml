@@ -9,6 +9,15 @@ on:
 jobs:
   api-test:
     runs-on: ubuntu-latest
+    # 定义可配置的环境变量，用户只需修改这里的参数
+    env:
+      # Apifox 相关配置参数
+      APIFOX_PROJECT_ID: '6463434'           # Apifox 项目ID
+      APIFOX_ENV_ID: '32377684'              # Apifox 环境ID
+      APIFOX_TEST_CASE_IDS: '1'              # 测试用例ID，可多个ID用逗号分隔，如 '1,2,3'
+      # 报告相关配置
+      REPORT_DIR: './report'                 # 报告输出目录
+      REPORT_FORMAT: 'html'                  # 报告格式
 
     steps:
       - name: Checkout Repository
@@ -22,29 +31,31 @@ jobs:
       - name: Install Apifox CLI
         run: npm install -g apifox-cli --unsafe-perm
 
-      - name: Run Apifox Test (HTML Only, Timestamped)
+      - name: Run Apifox Test
         id: run-test
         continue-on-error: true
         run: |
           set -e
-          mkdir -p report
+          mkdir -p ${{ env.REPORT_DIR }}
           NOW=$(date +'%Y%m%d-%H%M')
           apifox run \
             --access-token ${{ secrets.APIFOX_ACCESS_TOKEN }} \
-            -t 6463434 \
-            -e 32377684 \
-            -n 1 \
-            -r html \
-            --out-dir "./report" \
+            -t ${{ env.APIFOX_PROJECT_ID }} \
+            -e ${{ env.APIFOX_ENV_ID }} \
+            -n ${{ env.APIFOX_TEST_CASE_IDS }} \
+            -r ${{ env.REPORT_FORMAT }} \
+            --out-dir "${{ env.REPORT_DIR }}" \
             --out-file "apifox-report-${NOW}"
-          echo "report_html_path=$(pwd)/report/apifox-report-${NOW}.html" >> $GITHUB_OUTPUT
+          echo "report_html_path=$(pwd)/${{ env.REPORT_DIR }}/apifox-report-${NOW}.html" >> $GITHUB_OUTPUT
+          echo "report_filename=apifox-report-${NOW}.html" >> $GITHUB_OUTPUT
+          echo "test_case_ids=${{ env.APIFOX_TEST_CASE_IDS }}" >> $GITHUB_OUTPUT
 
       - name: Upload HTML Report
         id: upload-artifact
         uses: actions/upload-artifact@v4
         with:
           name: apifox-html-report
-          path: report/apifox-report-*.html
+          path: ${{ env.REPORT_DIR }}/apifox-report-*.html
 
       - name: Parse HTML Report Stats
         id: parse-html
@@ -68,7 +79,8 @@ jobs:
           ARTIFACT_URL: "${{ steps.upload-artifact.outputs.artifact-url }}"
         run: |
           FEISHU_MSG_TITLE="🚀 Apifox 接口自动化测试结果"
-          REPORT_HTML_PATH="${{ steps.run-test.outputs.report_html_path }}"
+          REPORT_FILENAME="${{ steps.run-test.outputs.report_filename }}"
+          TEST_CASE_IDS="${{ steps.run-test.outputs.test_case_ids }}"
           HTTP_TOTAL="${{ steps.parse-html.outputs.http_total }}"
           HTTP_FAILED="${{ steps.parse-html.outputs.http_failed }}"
           ASSERT_TOTAL="${{ steps.parse-html.outputs.assert_total }}"
@@ -85,13 +97,15 @@ jobs:
             --arg http_failed "$HTTP_FAILED" \
             --arg assert_total "$ASSERT_TOTAL" \
             --arg assert_failed "$ASSERT_FAILED" \
+            --arg test_case_ids "$TEST_CASE_IDS" \
             --arg url "$ARTIFACT_URL" \
-            --arg filename "$(basename $REPORT_HTML_PATH)" \
+            --arg filename "$REPORT_FILENAME" \
             '[
               [{tag:"text", text:"📦 仓库: "},{tag:"text", text:$repo}],
               [{tag:"text", text:"🔖 分支: "},{tag:"text", text:$branch}],
               [{tag:"text", text:"🧪 状态: "},{tag:"text", text:$status}],
               [{tag:"text", text:"总耗时: "},{tag:"text", text:$duration}],
+              [{tag:"text", text:"执行测试用例ID: "},{tag:"text", text:$test_case_ids}],
               [{tag:"text", text:"HTTP接口总数: "},{tag:"text", text:$http_total}],
               [{tag:"text", text:"HTTP接口失败数: "},{tag:"text", text:$http_failed}],
               [{tag:"text", text:"断言总数: "},{tag:"text", text:$assert_total}],
