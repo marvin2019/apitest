@@ -1,0 +1,124 @@
+name: Automated API Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  api-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install Apifox CLI
+        run: npm install -g apifox-cli --unsafe-perm
+
+      - name: Run Apifox Test (HTML Only, Timestamped)
+        id: run-test
+        continue-on-error: true
+        run: |
+          set -e
+          mkdir -p report
+          NOW=$(date +'%Y%m%d-%H%M')
+          apifox run \
+            --access-token ${{ secrets.APIFOX_ACCESS_TOKEN }} \
+            -t 6463434 \
+            -e 32377684 \
+            -n 1 \
+            -r html \
+            --out-dir "./report" \
+            --out-file "apifox-report-${NOW}"
+          echo "report_html_path=$(pwd)/report/apifox-report-${NOW}.html" >> $GITHUB_OUTPUT
+
+      - name: Upload HTML Report
+        id: upload-artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apifox-html-report
+          path: report/apifox-report-*.html
+
+      - name: Parse HTML Report Stats
+        id: parse-html
+        run: |
+          REPORT_HTML="${{ steps.run-test.outputs.report_html_path }}"
+          # 提取统计数据
+          HTTP_TOTAL=$(grep -A 2 "HTTP 接口请求数" "$REPORT_HTML" | grep -oE '[0-9]+' | head -n1)
+          HTTP_FAILED=$(grep -A 2 "HTTP 接口请求数" "$REPORT_HTML" | grep -oE '[0-9]+' | tail -n1)
+          ASSERT_TOTAL=$(grep -A 2 "断言数" "$REPORT_HTML" | grep -oE '[0-9]+' | head -n1)
+          ASSERT_FAILED=$(grep -A 2 "断言数" "$REPORT_HTML" | grep -oE '[0-9]+' | tail -n1)
+          DURATION=$(grep -oP '总耗时: \K[0-9\.]+s' "$REPORT_HTML" | head -n1)
+          echo "http_total=$HTTP_TOTAL" >> $GITHUB_OUTPUT
+          echo "http_failed=$HTTP_FAILED" >> $GITHUB_OUTPUT
+          echo "assert_total=$ASSERT_TOTAL" >> $GITHUB_OUTPUT
+          echo "assert_failed=$ASSERT_FAILED" >> $GITHUB_OUTPUT
+          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+
+      - name: Send Test Report to Feishu
+        if: always()
+        env:
+          ARTIFACT_URL: "${{ steps.upload-artifact.outputs.artifact-url }}"
+        run: |
+          FEISHU_MSG_TITLE="🚀 Apifox 接口自动化测试结果"
+          REPORT_HTML_PATH="${{ steps.run-test.outputs.report_html_path }}"
+          HTTP_TOTAL="${{ steps.parse-html.outputs.http_total }}"
+          HTTP_FAILED="${{ steps.parse-html.outputs.http_failed }}"
+          ASSERT_TOTAL="${{ steps.parse-html.outputs.assert_total }}"
+          ASSERT_FAILED="${{ steps.parse-html.outputs.assert_failed }}"
+          DURATION="${{ steps.parse-html.outputs.duration }}"
+
+          # 飞书内容分行富文本，每行独立 tag，报告下载链接精确到 artifact-id
+          FEISHU_CONTENT_JSON=$(jq -n \
+            --arg repo "${{ github.repository }}" \
+            --arg branch "${{ github.ref_name }}" \
+            --arg status "执行完成" \
+            --arg duration "$DURATION" \
+            --arg http_total "$HTTP_TOTAL" \
+            --arg http_failed "$HTTP_FAILED" \
+            --arg assert_total "$ASSERT_TOTAL" \
+            --arg assert_failed "$ASSERT_FAILED" \
+            --arg url "$ARTIFACT_URL" \
+            --arg filename "$(basename $REPORT_HTML_PATH)" \
+            '[
+              [{tag:"text", text:"📦 仓库: "},{tag:"text", text:$repo}],
+              [{tag:"text", text:"🔖 分支: "},{tag:"text", text:$branch}],
+              [{tag:"text", text:"🧪 状态: "},{tag:"text", text:$status}],
+              [{tag:"text", text:"总耗时: "},{tag:"text", text:$duration}],
+              [{tag:"text", text:"HTTP接口总数: "},{tag:"text", text:$http_total}],
+              [{tag:"text", text:"HTTP接口失败数: "},{tag:"text", text:$http_failed}],
+              [{tag:"text", text:"断言总数: "},{tag:"text", text:$assert_total}],
+              [{tag:"text", text:"断言失败数: "},{tag:"text", text:$assert_failed}],
+              [{tag:"text", text:"报告下载地址: "},{tag:"a", text:"点击下载HTML报告", href:$url}],
+              [{tag:"text", text:"报告文件名: "},{tag:"text", text:$filename}]
+            ]'
+          )
+
+          JSON_PAYLOAD=$(jq -n \
+            --arg title "$FEISHU_MSG_TITLE" \
+            --argjson content "$FEISHU_CONTENT_JSON" \
+            '{
+              msg_type: "post",
+              content: {
+                post: {
+                  zh_cn: {
+                    title: $title,
+                    content: $content
+                  }
+                }
+              }
+            }'
+          )
+
+          if [ -n "${{ secrets.FEISHU_WEBHOOK_URL }}" ]; then
+            curl -X POST "${{ secrets.FEISHU_WEBHOOK_URL }}" \
+              -H "Content-Type: application/json" \
+              -d "$JSON_PAYLOAD"
+          fi
