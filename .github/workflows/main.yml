@@ -37,7 +37,12 @@ jobs:
         run: |
           set -e
           mkdir -p ${{ env.REPORT_DIR }}
+          # 使用带时区的时间生成报告文件名
           NOW=$(date +'%Y%m%d-%H%M')
+          # 获取UTC+8时间用于文件名
+          UTC_PLUS_8_NOW=$(date -u -d '+8 hours' +'%Y%m%d-%H%M')
+          REPORT_FILENAME="apifox-report-${UTC_PLUS_8_NOW}"
+          
           apifox run \
             --access-token ${{ secrets.APIFOX_ACCESS_TOKEN }} \
             -t ${{ env.APIFOX_PROJECT_ID }} \
@@ -45,9 +50,9 @@ jobs:
             -n ${{ env.APIFOX_TEST_RUN_COUNT }} \
             -r ${{ env.REPORT_FORMAT }} \
             --out-dir "${{ env.REPORT_DIR }}" \
-            --out-file "apifox-report-${NOW}"
-          echo "report_html_path=$(pwd)/${{ env.REPORT_DIR }}/apifox-report-${NOW}.html" >> $GITHUB_OUTPUT
-          echo "report_filename=apifox-report-${NOW}.html" >> $GITHUB_OUTPUT
+            --out-file "$REPORT_FILENAME"
+          echo "report_html_path=$(pwd)/${{ env.REPORT_DIR }}/${REPORT_FILENAME}.html" >> $GITHUB_OUTPUT
+          echo "report_filename=${REPORT_FILENAME}.html" >> $GITHUB_OUTPUT
           echo "test_run_count=${{ env.APIFOX_TEST_RUN_COUNT }}" >> $GITHUB_OUTPUT
 
       - name: Upload HTML Report
