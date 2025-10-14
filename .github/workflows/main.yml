@@ -67,13 +67,22 @@ jobs:
           ASSERT_TOTAL=$(grep -A 2 "断言数" "$REPORT_HTML" | grep -oE '[0-9]+' | head -n1)
           ASSERT_FAILED=$(grep -A 2 "断言数" "$REPORT_HTML" | grep -oE '[0-9]+' | tail -n1)
           
-          # 改进的总耗时提取方法，支持不同格式
-          DURATION=$(grep -oP '总耗时: \K[0-9\.]+[smhd]?' "$REPORT_HTML" | head -n1)
-          # 如果第一种方法失败，尝试备用方法
+          # 基于HTML报告实际格式改进的总耗时提取方法
+          # 先尝试直接提取完整的总耗时值，例如"2.22s"
+          DURATION=$(grep -A 1 "总耗时" "$REPORT_HTML" | grep -o '[0-9]\+\.[0-9]\+[a-zA-Z]\?\|[0-9]\+[a-zA-Z]\?')
+          
+          # 如果第一种方法失败，尝试使用正则表达式提取
           if [ -z "$DURATION" ]; then
-            # 尝试使用不依赖-P参数的方法
-            DURATION=$(grep "总耗时" "$REPORT_HTML" | grep -o '[0-9]\+\.[0-9]\+[smhd]\?\|[0-9]\+[smhd]\?')
+            DURATION=$(grep -oP '总耗时.*?>\K[0-9\.]+[a-zA-Z]?' "$REPORT_HTML" | head -n1)
           fi
+          
+          # 如果仍然失败，尝试使用更通用的方法
+          if [ -z "$DURATION" ]; then
+            # 提取表格中的总耗时值
+            # 先找到包含"总耗时"的行，然后提取后面的数值
+            DURATION=$(grep "总耗时" "$REPORT_HTML" -A 1 | grep -o '[0-9]\+\.[0-9]\+[a-zA-Z]\?\|[0-9]\+[a-zA-Z]\?')
+          fi
+          
           # 如果仍然失败，设置默认值
           if [ -z "$DURATION" ]; then
             DURATION="N/A"
