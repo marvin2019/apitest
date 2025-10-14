@@ -67,9 +67,28 @@ jobs:
           ASSERT_TOTAL=$(grep -A 2 "断言数" "$REPORT_HTML" | grep -oE '[0-9]+' | head -n1)
           ASSERT_FAILED=$(grep -A 2 "断言数" "$REPORT_HTML" | grep -oE '[0-9]+' | tail -n1)
           
+          # 提取测试场景、运行时间和运行工具信息
+          # 提取测试场景
+          TEST_SCENARIO=$(grep -A 2 "测试场景" "$REPORT_HTML" | grep -A 1 "<div class=\"col-md-4 text-label\">测试场景</div>" | grep -o '<div class=\"col-md-8\">[^<]*</div>' | sed 's/<[^>]*>//g' | tr -d '[:space:]')
+          if [ -z "$TEST_SCENARIO" ]; then
+            TEST_SCENARIO="N/A"
+          fi
+          
+          # 提取运行时间
+          RUN_TIME=$(grep -A 2 "运行时间" "$REPORT_HTML" | grep -A 1 "<div class=\"col-md-4 text-label\">运行时间</div>" | grep -o '<div class=\"col-md-8\">[^<]*</div>' | sed 's/<[^>]*>//g' | tr -d '[:space:]')
+          if [ -z "$RUN_TIME" ]; then
+            RUN_TIME="N/A"
+          fi
+          
+          # 提取运行工具
+          RUN_TOOL=$(grep -A 2 "运行工具" "$REPORT_HTML" | grep -A 1 "<div class=\"col-md-4 text-label\">运行工具</div>" | grep -o '<div class=\"col-md-8\">[^<]*</div>' | sed 's/<[^>]*>//g' | tr -d '[:space:]')
+          if [ -z "$RUN_TOOL" ]; then
+            RUN_TOOL="N/A"
+          fi
+          
           # 基于HTML报告实际格式改进的总耗时提取方法
           # 方法1：直接匹配div结构，找到包含"总耗时"的div后面的div内容
-          DURATION=$(grep -A 2 "总耗时" "$REPORT_HTML" | grep -A 1 "<div class=\"col-md-4 text-label\">总耗时</div>" | grep -o '<div class="col-md-8">[^<]*</div>' | sed 's/<[^>]*>//g' | tr -d '[:space:]')
+          DURATION=$(grep -A 2 "总耗时" "$REPORT_HTML" | grep -A 1 "<div class=\"col-md-4 text-label\">总耗时</div>" | grep -o '<div class=\"col-md-8\">[^<]*</div>' | sed 's/<[^>]*>//g' | tr -d '[:space:]')
           
           # 方法2：如果第一种方法失败，使用简单的正则表达式提取
           if [ -z "$DURATION" ]; then
@@ -93,6 +112,9 @@ jobs:
           echo "assert_total=$ASSERT_TOTAL" >> $GITHUB_OUTPUT
           echo "assert_failed=$ASSERT_FAILED" >> $GITHUB_OUTPUT
           echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          echo "test_scenario=$TEST_SCENARIO" >> $GITHUB_OUTPUT
+          echo "run_time=$RUN_TIME" >> $GITHUB_OUTPUT
+          echo "run_tool=$RUN_TOOL" >> $GITHUB_OUTPUT
 
       - name: Send Test Report to Feishu
         if: always()
@@ -107,6 +129,9 @@ jobs:
           ASSERT_TOTAL="${{ steps.parse-html.outputs.assert_total }}"
           ASSERT_FAILED="${{ steps.parse-html.outputs.assert_failed }}"
           DURATION="${{ steps.parse-html.outputs.duration }}"
+          TEST_SCENARIO="${{ steps.parse-html.outputs.test_scenario }}"
+          RUN_TIME="${{ steps.parse-html.outputs.run_time }}"
+          RUN_TOOL="${{ steps.parse-html.outputs.run_tool }}"
 
           # 飞书内容分行富文本，每行独立 tag，报告下载链接精确到 artifact-id
           FEISHU_CONTENT_JSON=$(jq -n \
@@ -121,10 +146,16 @@ jobs:
             --arg test_run_count "$TEST_RUN_COUNT" \
             --arg url "$ARTIFACT_URL" \
             --arg filename "$REPORT_FILENAME" \
+            --arg test_scenario "$TEST_SCENARIO" \
+            --arg run_time "$RUN_TIME" \
+            --arg run_tool "$RUN_TOOL" \
             '[
               [{tag:"text", text:"📦 仓库: "},{tag:"text", text:$repo}],
               [{tag:"text", text:"🔖 分支: "},{tag:"text", text:$branch}],
               [{tag:"text", text:"🧪 状态: "},{tag:"text", text:$status}],
+              [{tag:"text", text:"📋 测试场景: "},{tag:"text", text:$test_scenario}],
+              [{tag:"text", text:"⏰ 运行时间: "},{tag:"text", text:$run_time}],
+              [{tag:"text", text:"🔧 运行工具: "},{tag:"text", text:$run_tool}],
               [{tag:"text", text:"总耗时: "},{tag:"text", text:$duration}],
               [{tag:"text", text:"测试用例执行次数: "},{tag:"text", text:$test_run_count}],
               [{tag:"text", text:"HTTP接口总数: "},{tag:"text", text:$http_total}],
