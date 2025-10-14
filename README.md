@@ -21,7 +21,7 @@
 |------|------|----------|
 | `APIFOX_PROJECT_ID` | Apifox 项目 ID | 在 Apifox 项目 URL 中可以找到 |
 | `APIFOX_ENV_ID` | 环境 ID | 在 Apifox 环境设置中可以查看环境的 ID |
-| `APIFOX_TEST_CASE_IDS` | 测试用例 ID（支持多个） | 在测试用例详情页 URL 中可以找到，多个 ID 用逗号分隔，如 '1,2,3' |
+| `APIFOX_TEST_RUN_COUNT` | 执行次数 | 控制测试用例重复执行的次数，可设置为数字 |
 
 ## Apifox CLI 参考
 
@@ -41,12 +41,12 @@ Apifox CLI 提供了丰富的命令选项，详情请参考 [Apifox CLI 命令�
 
 编辑 `.github/workflows/main.yml` 文件，更新测试参数以匹配您的 Apifox 项目。
 
-### 4. 配置多个测试用例
+### 4. 配置测试用例执行次数
 
-如果需要运行多个测试用例，可以在 `APIFOX_TEST_CASE_IDS` 中用逗号分隔多个测试用例 ID，例如：
+可以在 `APIFOX_TEST_RUN_COUNT` 中设置测试用例的执行次数，例如：
 
 ```yaml
-APIFOX_TEST_CASE_IDS: '1,2,3,4'
+APIFOX_TEST_RUN_COUNT: '3'  # 表示每个测试用例重复执行3次
 ```
 
 ### 5. 触发测试
@@ -72,7 +72,7 @@ APIFOX_TEST_CASE_IDS: '1,2,3,4'
 - 分支信息
 - 测试状态
 - 总耗时
-- 执行的测试用例 ID
+- 执行的测试用例次数
 - HTTP 接口总数和失败数
 - 断言总数和失败数
 - 报告下载链接
@@ -92,7 +92,7 @@ APIFOX_TEST_CASE_IDS: '1,2,3,4'
 1. **测试失败**：检查 Apifox 访问令牌是否有效，以及项目 ID 和环境 ID 是否正确
 2. **飞书通知未收到**：确认 Webhook URL 是否正确，以及网络连接是否正常
 3. **报告下载失败**：检查 Artifact 上传步骤是否成功执行
-4. **多测试用例执行问题**：确保测试用例 ID 之间使用英文逗号分隔，不要有空格
+4. **测试用例执行次数问题**：确保 `APIFOX_TEST_RUN_COUNT` 设置为有效的数字
 
 ### 查看详细日志
 
