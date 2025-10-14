@@ -74,10 +74,13 @@ jobs:
             TEST_SCENARIO="N/A"
           fi
           
-          # 提取运行时间
+          # 提取运行时间并修复格式问题，添加时区信息
           RUN_TIME=$(grep -A 2 "运行时间" "$REPORT_HTML" | grep -A 1 "<div class=\"col-md-4 text-label\">运行时间</div>" | grep -o '<div class=\"col-md-8\">[^<]*</div>' | sed 's/<[^>]*>//g' | tr -d '[:space:]')
           if [ -z "$RUN_TIME" ]; then
             RUN_TIME="N/A"
+          else
+            # 修复格式：在日期和时间之间添加空格，格式为"YYYY-MM-DD HH:MM:SS"
+            RUN_TIME=$(echo "$RUN_TIME" | sed -E 's/([0-9]{4}-[0-9]{2}-[0-9]{2})([0-9]{2}:[0-9]{2}:[0-9]{2})/\1 \2 UTC+8/' || echo "$RUN_TIME UTC+8")
           fi
           
           # 提取运行工具
