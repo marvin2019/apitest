@@ -68,19 +68,19 @@ jobs:
           ASSERT_FAILED=$(grep -A 2 "断言数" "$REPORT_HTML" | grep -oE '[0-9]+' | tail -n1)
           
           # 基于HTML报告实际格式改进的总耗时提取方法
-          # 先尝试直接提取完整的总耗时值，例如"2.22s"
-          DURATION=$(grep -A 1 "总耗时" "$REPORT_HTML" | grep -o '[0-9]\+\.[0-9]\+[a-zA-Z]\?\|[0-9]\+[a-zA-Z]\?')
+          # 方法1：直接匹配div结构，找到包含"总耗时"的div后面的div内容
+          DURATION=$(grep -A 2 "总耗时" "$REPORT_HTML" | grep -A 1 "<div class=\"col-md-4 text-label\">总耗时</div>" | grep -o '<div class="col-md-8">[^<]*</div>' | sed 's/<[^>]*>//g' | tr -d '[:space:]')
           
-          # 如果第一种方法失败，尝试使用正则表达式提取
+          # 方法2：如果第一种方法失败，使用简单的正则表达式提取
           if [ -z "$DURATION" ]; then
-            DURATION=$(grep -oP '总耗时.*?>\K[0-9\.]+[a-zA-Z]?' "$REPORT_HTML" | head -n1)
+            # 查找包含"总耗时"的行，获取下一行内容，然后提取数字和单位
+            DURATION=$(grep -A 1 "总耗时" "$REPORT_HTML" | grep -o '[0-9]\+\.[0-9]\+[a-zA-Z]\?\|[0-9]\+[a-zA-Z]\?')
           fi
           
-          # 如果仍然失败，尝试使用更通用的方法
+          # 方法3：如果仍然失败，尝试使用更直接的方式
           if [ -z "$DURATION" ]; then
-            # 提取表格中的总耗时值
-            # 先找到包含"总耗时"的行，然后提取后面的数值
-            DURATION=$(grep "总耗时" "$REPORT_HTML" -A 1 | grep -o '[0-9]\+\.[0-9]\+[a-zA-Z]\?\|[0-9]\+[a-zA-Z]\?')
+            # 提取所有div内容，然后找到总耗时后面的值
+            DURATION=$(grep -A 1 "总耗时" "$REPORT_HTML" | grep "col-md-8" | sed 's/<[^>]*>//g' | tr -d '[:space:]')
           fi
           
           # 如果仍然失败，设置默认值
