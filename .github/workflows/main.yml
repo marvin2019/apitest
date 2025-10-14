@@ -74,13 +74,24 @@ jobs:
             TEST_SCENARIO="N/A"
           fi
           
-          # 提取运行时间并修复格式问题，添加时区信息
+          # 提取运行时间并修复格式问题，添加正确的时区偏移
           RUN_TIME=$(grep -A 2 "运行时间" "$REPORT_HTML" | grep -A 1 "<div class=\"col-md-4 text-label\">运行时间</div>" | grep -o '<div class=\"col-md-8\">[^<]*</div>' | sed 's/<[^>]*>//g' | tr -d '[:space:]')
           if [ -z "$RUN_TIME" ]; then
             RUN_TIME="N/A"
           else
-            # 修复格式：在日期和时间之间添加空格，格式为"YYYY-MM-DD HH:MM:SS"
-            RUN_TIME=$(echo "$RUN_TIME" | sed -E 's/([0-9]{4}-[0-9]{2}-[0-9]{2})([0-9]{2}:[0-9]{2}:[0-9]{2})/\1 \2 UTC+8/' || echo "$RUN_TIME UTC+8")
+            # 提取日期部分和时间部分
+            DATE_PART=$(echo "$RUN_TIME" | sed -E 's/([0-9]{4}-[0-9]{2}-[0-9]{2})([0-9]{2}:[0-9]{2}:[0-9]{2})/\1/')
+            TIME_PART=$(echo "$RUN_TIME" | sed -E 's/([0-9]{4}-[0-9]{2}-[0-9]{2})([0-9]{2}:[0-9]{2}:[0-9]{2})/\2/')
+            
+            # 如果提取成功，添加8小时并格式化
+            if [ -n "$DATE_PART" ] && [ -n "$TIME_PART" ]; then
+              # 转换为UTC+8时间，使用GNU date命令
+              UTC_PLUS_8_TIME=$(date -d "$DATE_PART $TIME_PART UTC +8 hours" +"%Y-%m-%d %H:%M:%S")
+              RUN_TIME="$UTC_PLUS_8_TIME UTC+8"
+            else
+              # 格式不匹配时，保留原始值并添加UTC+0标识
+              RUN_TIME="$RUN_TIME UTC+0"
+            fi
           fi
           
           # 提取运行工具
